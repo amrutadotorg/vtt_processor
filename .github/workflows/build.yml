@@ -1,5 +1,4 @@
 name: Build Cross-Platform Executables
-
 on:
   push:
     branches: [ main ]
@@ -8,7 +7,6 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
-
 jobs:
   build:
     strategy:
@@ -48,6 +46,33 @@ jobs:
     
     - name: Build with PyInstaller
       run: pyinstaller ${{ matrix.pyinstaller_args }} --additional-hooks-dir=. vtt_processor.py
+    
+    - name: Create entitlements file for macOS
+      if: matrix.os == 'macos-latest'
+      run: |
+        cat > entitlements.plist << EOF
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+            <true/>
+            <key>com.apple.security.cs.allow-jit</key>
+            <true/>
+            <key>com.apple.security.cs.disable-library-validation</key>
+            <true/>
+        </dict>
+        </plist>
+        EOF
+    
+    - name: Sign macOS app with entitlements
+      if: matrix.os == 'macos-latest'
+      run: |
+        codesign --force --deep --entitlements entitlements.plist --sign - dist/${{ matrix.output_name }}
+    
+    - name: Set executable permissions
+      if: matrix.os != 'windows-latest'
+      run: chmod +x dist/${{ matrix.output_name }}
     
     - name: Upload artifact
       uses: actions/upload-artifact@v4

@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main ]
     tags:
-      - 'v*'  # Run workflow on version tags, e.g. v1.0, v20.15.10
+      - 'v*'
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -12,6 +12,8 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: write  # This line is crucial for release creation
     
     steps:
     - uses: actions/checkout@v3

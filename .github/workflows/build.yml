@@ -74,29 +74,68 @@ jobs:
       if: matrix.os != 'windows-latest'
       run: chmod +x dist/${{ matrix.output_name }}
     
-    - name: Install create-dmg for macOS
+    - name: Create proper macOS application bundle
       if: matrix.os == 'macos-latest'
       run: |
-        brew install create-dmg
+        mkdir -p "VTT Processor.app/Contents/MacOS"
+        cp dist/${{ matrix.output_name }} "VTT Processor.app/Contents/MacOS/VTT Processor"
+        chmod +x "VTT Processor.app/Contents/MacOS/VTT Processor"
+        
+        # Create minimal Info.plist
+        cat > "VTT Processor.app/Contents/Info.plist" << EOF
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>CFBundleExecutable</key>
+            <string>VTT Processor</string>
+            <key>CFBundleIdentifier</key>
+            <string>com.yourcompany.vttprocessor</string>
+            <key>CFBundleName</key>
+            <string>VTT Processor</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+            <key>CFBundleShortVersionString</key>
+            <string>1.0</string>
+            <key>LSMinimumSystemVersion</key>
+            <string>10.10</string>
+            <key>NSHighResolutionCapable</key>
+            <true/>
+        </dict>
+        </plist>
+        EOF
+        
+        # Sign the app bundle
+        codesign --force --deep --entitlements entitlements.plist --sign - "VTT Processor.app"
     
     - name: Create DMG for macOS
       if: matrix.os == 'macos-latest'
       run: |
-        mkdir -p dmg_contents/Applications
-        cp -R dist/${{ matrix.output_name }} dmg_contents/
-        chmod +x dmg_contents/${{ matrix.output_name }}
-        create-dmg \
-          --volname "VTT Processor" \
-          --volicon "icon.icns" \
-          --window-pos 200 120 \
-          --window-size 600 400 \
-          --icon-size 100 \
-          --icon "${{ matrix.output_name }}" 150 190 \
-          --hide-extension "${{ matrix.output_name }}" \
-          --app-drop-link 450 190 \
-          "${{ matrix.asset_name }}.dmg" \
-          "dmg_contents/"
+        # Create temporary DMG
+        hdiutil create -volname "VTT Processor" -srcfolder "VTT Processor.app" -ov -format UDRW temp.dmg
         
+        # Mount the DMG
+        device=$(hdiutil attach -readwrite -noverify -noautoopen temp.dmg | egrep '^/dev/' | sed 1q | awk '{print $1}')
+        
+        # Create .background folder and add Applications symlink
+        mkdir -p "/Volumes/VTT Processor/.background"
+        ln -s /Applications "/Volumes/VTT Processor/Applications"
+        
+        # Set permissions
+        chmod -R 755 "/Volumes/VTT Processor/VTT Processor.app"
+        
+        # Create DS_Store with window layout settings
+        sleep 5
+        
+        # Unmount
+        hdiutil detach $device
+        
+        # Convert to final compressed DMG
+        hdiutil convert temp.dmg -format UDZO -o "${{ matrix.asset_name }}.dmg"
+        
+        # Clean up
+        rm temp.dmg
+    
     - name: Upload macOS DMG artifact
       if: matrix.os == 'macos-latest'
       uses: actions/upload-artifact@v4

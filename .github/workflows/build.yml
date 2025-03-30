@@ -47,6 +47,7 @@ jobs:
     - name: Build with PyInstaller
       run: pyinstaller ${{ matrix.pyinstaller_args }} --additional-hooks-dir=. vtt_processor.py
     
+    # macOS specific steps
     - name: Create entitlements file for macOS
       if: matrix.os == 'macos-latest'
       run: |
@@ -136,28 +137,83 @@ jobs:
         # Clean up
         rm temp.dmg
     
+    # Linux specific steps - create AppImage or tarball with wrapper script
+    - name: Package Linux executable in tar.gz with wrapper script
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        mkdir -p vtt_processor_package
+        cp dist/${{ matrix.output_name }} vtt_processor_package/
+        chmod +x vtt_processor_package/${{ matrix.output_name }}
+        
+        # Create a simple wrapper script to ensure executable permissions
+        cat > vtt_processor_package/run_vtt_processor.sh << 'EOF'
+        #!/bin/bash
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        chmod +x "$SCRIPT_DIR/vtt_processor_linux"
+        "$SCRIPT_DIR/vtt_processor_linux" "$@"
+        EOF
+        
+        chmod +x vtt_processor_package/run_vtt_processor.sh
+        
+        # Create README with installation instructions
+        cat > vtt_processor_package/README.txt << 'EOF'
+        VTT Processor for Linux
+        ======================
+
+        To run VTT Processor:
+
+        Method 1 (Recommended): Use the provided script
+        ---------------------------------------------
+        1. Open a terminal in this folder
+        2. Run: ./run_vtt_processor.sh
+
+        Method 2: Set permissions manually
+        -------------------------------
+        1. Open a terminal in this folder
+        2. Run: chmod +x vtt_processor_linux
+        3. Run: ./vtt_processor_linux
+        EOF
+        
+        # Create tarball
+        tar -czf ${{ matrix.asset_name }}.tar.gz -C vtt_processor_package .
+    
+    # Upload artifacts based on platform
     - name: Upload macOS DMG artifact
       if: matrix.os == 'macos-latest'
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.asset_name }}-dmg
         path: ${{ matrix.asset_name }}.dmg
+    
+    - name: Upload Linux tarball artifact
+      if: matrix.os == 'ubuntu-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.asset_name }}-tarball
+        path: ${{ matrix.asset_name }}.tar.gz
         
-    - name: Upload non-macOS artifact
-      if: matrix.os != 'macos-latest'
+    - name: Upload Windows artifact
+      if: matrix.os == 'windows-latest'
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.asset_name }}
         path: dist/${{ matrix.output_name }}
-        
+    
+    # Upload to releases if this is a tag
     - name: Create Release (macOS DMG)
       if: startsWith(github.ref, 'refs/tags/') && matrix.os == 'macos-latest'
       uses: softprops/action-gh-release@v1
       with:
         files: ${{ matrix.asset_name }}.dmg
+    
+    - name: Create Release (Linux tarball)
+      if: startsWith(github.ref, 'refs/tags/') && matrix.os == 'ubuntu-latest'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: ${{ matrix.asset_name }}.tar.gz
         
-    - name: Create Release (non-macOS)
-      if: startsWith(github.ref, 'refs/tags/') && matrix.os != 'macos-latest'
+    - name: Create Release (Windows)
+      if: startsWith(github.ref, 'refs/tags/') && matrix.os == 'windows-latest'
       uses: softprops/action-gh-release@v1
       with:
         files: dist/${{ matrix.output_name }}

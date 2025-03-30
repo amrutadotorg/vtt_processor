@@ -18,12 +18,15 @@ jobs:
           - os: windows-latest
             output_name: vtt_processor.exe
             asset_name: vtt_processor-windows
+            pyinstaller_args: --onefile --windowed --name vtt_processor
           - os: macos-latest
-            output_name: vtt_processor
+            output_name: vtt_processor_mac
             asset_name: vtt_processor-macos
+            pyinstaller_args: --onefile --windowed --name vtt_processor_mac
           - os: ubuntu-latest
-            output_name: vtt_processor
+            output_name: vtt_processor_linux
             asset_name: vtt_processor-linux
+            pyinstaller_args: --onefile --windowed --name vtt_processor_linux
     
     runs-on: ${{ matrix.os }}
     permissions:
@@ -44,7 +47,7 @@ jobs:
         pip install pyinstaller
     
     - name: Build with PyInstaller
-      run: pyinstaller --onefile --windowed --name vtt_processor --additional-hooks-dir=. vtt_processor.py
+      run: pyinstaller ${{ matrix.pyinstaller_args }} --additional-hooks-dir=. vtt_processor.py
     
     - name: Upload artifact
       uses: actions/upload-artifact@v4

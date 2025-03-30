@@ -74,14 +74,51 @@ jobs:
       if: matrix.os != 'windows-latest'
       run: chmod +x dist/${{ matrix.output_name }}
     
-    - name: Upload artifact
+    - name: Install create-dmg for macOS
+      if: matrix.os == 'macos-latest'
+      run: |
+        brew install create-dmg
+    
+    - name: Create DMG for macOS
+      if: matrix.os == 'macos-latest'
+      run: |
+        mkdir -p dmg_contents/Applications
+        cp -R dist/${{ matrix.output_name }} dmg_contents/
+        chmod +x dmg_contents/${{ matrix.output_name }}
+        create-dmg \
+          --volname "VTT Processor" \
+          --volicon "icon.icns" \
+          --window-pos 200 120 \
+          --window-size 600 400 \
+          --icon-size 100 \
+          --icon "${{ matrix.output_name }}" 150 190 \
+          --hide-extension "${{ matrix.output_name }}" \
+          --app-drop-link 450 190 \
+          "${{ matrix.asset_name }}.dmg" \
+          "dmg_contents/"
+        
+    - name: Upload macOS DMG artifact
+      if: matrix.os == 'macos-latest'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.asset_name }}-dmg
+        path: ${{ matrix.asset_name }}.dmg
+        
+    - name: Upload non-macOS artifact
+      if: matrix.os != 'macos-latest'
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.asset_name }}
         path: dist/${{ matrix.output_name }}
         
-    - name: Create Release
-      if: startsWith(github.ref, 'refs/tags/')
+    - name: Create Release (macOS DMG)
+      if: startsWith(github.ref, 'refs/tags/') && matrix.os == 'macos-latest'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: ${{ matrix.asset_name }}.dmg
+        
+    - name: Create Release (non-macOS)
+      if: startsWith(github.ref, 'refs/tags/') && matrix.os != 'macos-latest'
       uses: softprops/action-gh-release@v1
       with:
         files: dist/${{ matrix.output_name }}
